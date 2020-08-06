@@ -22,7 +22,7 @@ import logging
 import math
 import string
 from collections import OrderedDict
-from typing import Awaitable, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from synapse.api.constants import (
     EventTypes,
@@ -37,6 +37,7 @@ from synapse.events.utils import copy_power_levels_contents
 from synapse.http.endpoint import parse_and_validate_server_name
 from synapse.storage.state import StateFilter
 from synapse.types import (
+    EventStreamToken,
     Requester,
     RoomAlias,
     RoomID,
@@ -1037,13 +1038,19 @@ class RoomEventSource(object):
         self.store = hs.get_datastore()
 
     async def get_new_events(
-        self, user, from_key, limit, room_ids, is_guest, explicit_room_id=None
+        self,
+        user: UserID,
+        from_key: EventStreamToken,
+        limit: int,
+        room_ids: List[str],
+        is_guest: bool,
+        explicit_room_id: str = None,
     ):
         # We just ignore the key for now.
 
         to_key = self.get_current_key()
 
-        from_token = RoomStreamToken.parse(from_key)
+        from_token = RoomStreamToken.parse(from_key.token)
         if from_token.topological:
             logger.warning("Stream has topological part!!!! %r", from_key)
             from_key = "s%s" % (from_token.stream,)
@@ -1082,10 +1089,7 @@ class RoomEventSource(object):
         return (events, end_key)
 
     def get_current_key(self) -> str:
-        return "s%d" % (self.store.get_room_max_stream_ordering(),)
-
-    def get_current_key_for_room(self, room_id: str) -> Awaitable[str]:
-        return self.store.get_room_events_max_id(room_id)
+        return EventStreamToken("s%d" % (self.store.get_room_max_stream_ordering(),))
 
 
 class RoomShutdownHandler(object):
